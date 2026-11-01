@@ -1,7 +1,8 @@
 # Monivo
 
-Shared expense app. Phase 1 adds the development foundation only; accounts,
-groups, expenses, payments, and product screens are not implemented yet.
+Shared expense app. Phase 1 provides the development foundation. Phase 2 adds
+interactive mobile screens backed by sample data. Authentication, persistent
+group/expense APIs, and payment integrations are not implemented yet.
 
 ```text
 apps/
@@ -41,7 +42,7 @@ a configured Android emulator. Expo Go and the project's SDK must match. If Expo
 Go does not support this SDK on your device, use an Expo development build. Native
 Android builds require the Android SDK; local iOS builds require macOS.
 
-The mobile starter screen is intentionally static. It does not yet call the API.
+The mobile app runs independently with in-memory sample data. It does not call the API.
 For future physical-device API calls, localhost points to the phone; use your
 computer's LAN address and configure API HOST/firewall accordingly. Never expose
 MongoDB to the phone. No backend credentials belong in the mobile environment.
@@ -85,7 +86,42 @@ Expo Doctor (20/20 checks). Build exports are ignored by Git.
 Still pending: opening the app on a physical Android device or emulator and
 visually checking the starter screen. Android bundling is not a native-device
 launch test. Graceful signal shutdown is implemented but has not been verified
-on a Unix deployment host. Phase 2 product UI has not started.
+on a Unix deployment host.
+
+### Phase 2 mobile preview
+
+- Groups, Balances, and Activity tabs, with group and expense detail screens.
+- Sample group creation and expense entry with equal or custom-amount splits.
+- User-recorded partial/full payment previews. Pending payments preserve balances;
+  only the sample recipient can confirm receipt. No money is transferred.
+- Empty states, route error handling, a loading fallback, and form validation.
+- NativeWind 4 with neutral surfaces, ink headings, cobalt actions, and pastel
+  blue, peach, lavender, and yellow accents inspired by https://vibrant.design/.
+  Text, Button, and Input are adapted
+  from React Native Reusables, with its license retained beside the components.
+- TanStack Form handles expense form state. TanStack Query is intentionally not
+  installed until the mobile app actually fetches API data.
+
+Sample members represent registered accounts; this preview performs no real login,
+invitation, or account creation. Demo changes disappear on reload/restart. The
+calculation helpers in src/demo are UI fixtures, not authoritative backend logic.
+The fixed light palette is centralized in src/lib/colors.json and consumed by
+tailwind.config.js and src/lib/theme.ts. The Reusables
+CLI doctor expects its default CSS-variable theme and will flag this custom setup;
+use TypeScript, Expo Doctor, and the runtime preview to validate it instead.
+
+Use `pnpm --filter @monivo/mobile web` for the web preview, or
+`pnpm --filter @monivo/mobile exec expo start --port 8092` to choose a free port.
+NativeWind requires a Metro restart after Babel/Metro configuration changes;
+restart with `pnpm dev:mobile --clear` when needed. New native dependencies require
+a new development build if using a custom development client.
+
+Verified in the browser preview: required expense fields, custom split total
+validation, creating a sample expense and updating its group, incoming payment
+confirmation, outgoing partial payment pending status, and empty group display.
+Android bundle export, calculation tests, and Expo Doctor also pass. Actual Android
+keyboard behavior, larger system font sizes, and native screen layout remain
+device checks; browser validation does not replace them.
 
 ## Local MongoDB
 

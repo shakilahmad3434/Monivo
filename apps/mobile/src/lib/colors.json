@@ -1,0 +1,21 @@
+{
+  "background": "#F7F7FA",
+  "text": "#232633",
+  "muted": "#696D7A",
+  "primary": "#3459E8",
+  "accent": "#ECE8FA",
+  "secondary": "#F0F1F5",
+  "border": "#E6E7ED",
+  "input": "#D7DAE4",
+  "danger": "#A4452F",
+  "white": "#FFFFFF",
+  "ink": "#232738",
+  "blueSoft": "#EAF0FF",
+  "blueText": "#294F9E",
+  "peachSoft": "#FFF0E8",
+  "peachText": "#99452C",
+  "lilacSoft": "#EEE8FC",
+  "lilacText": "#655093",
+  "yellowSoft": "#FFF5CF",
+  "yellowText": "#7B601D"
+}
