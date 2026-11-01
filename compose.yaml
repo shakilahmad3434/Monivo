@@ -3,14 +3,23 @@ name: monivo
 services:
   mongodb:
     image: mongo:8.0
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    command: ['mongod', '--replSet', 'rs0', '--bind_ip_all']
     ports:
-      - "127.0.0.1:27017:27017"
+      - '127.0.0.1:27017:27017'
     volumes:
       - mongodb_data:/data/db
       - ./docker/mongodb/healthcheck.js:/healthcheck.js:ro
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--host", "127.0.0.1", "--file", "/healthcheck.js"]
+      test:
+        [
+          'CMD',
+          'mongosh',
+          '--quiet',
+          '--host',
+          '127.0.0.1',
+          '--file',
+          '/healthcheck.js',
+        ]
       interval: 5s
       timeout: 10s
       start_period: 15s

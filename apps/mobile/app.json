@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Monivo",
+    "slug": "monivo",
+    "scheme": "monivo",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/monivo-icon.png",
+    "userInterfaceStyle": "light",
+    "plugins": ["expo-router"]
+  }
+}

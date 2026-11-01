@@ -2,5 +2,34 @@
   "name": "monivo",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@11.25.0"
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "build:shared": "pnpm --filter @monivo/shared build",
+    "predev:mobile": "pnpm build:shared",
+    "predev:api": "pnpm build:shared",
+    "prebuild:api": "pnpm build:shared",
+    "pretypecheck": "pnpm build:shared",
+    "pretest": "pnpm build:shared",
+    "dev:mobile": "pnpm --filter @monivo/mobile start",
+    "dev:api": "pnpm --filter @monivo/api dev",
+    "build:api": "pnpm --filter @monivo/api build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "test": "pnpm --filter @monivo/api test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.0.0",
+    "eslint": "^10.14.0",
+    "eslint-config-prettier": "^10.1.0",
+    "globals": "^16.5.0",
+    "prettier": "^3.6.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.46.0"
+  }
 }

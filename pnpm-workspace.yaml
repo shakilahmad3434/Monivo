@@ -1,3 +1,9 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+allowBuilds:
+  # Required by tsx/Vitest to prepare the platform-specific executable.
+  esbuild: true
+overrides:
+  # Keep Expo's transitive DOM renderer aligned with the template's React version.
+  react-dom: 19.3.0
