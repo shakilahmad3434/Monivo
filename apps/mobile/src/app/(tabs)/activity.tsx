@@ -12,12 +12,12 @@ import {
 import { memberName, money } from '@/demo/model';
 import { useDemo } from '@/demo/provider';
 import { useSession } from '@/auth/session';
-import { LiveEmptyScreen } from '@/features/groups/live';
+import { LiveLedgerScreen } from '@/features/expenses/live';
 
 export default function ActivityScreen() {
   const { mode } = useSession();
   return mode === 'authenticated' ? (
-    <LiveEmptyScreen activity />
+    <LiveLedgerScreen activity />
   ) : (
     <DemoActivityScreen />
   );

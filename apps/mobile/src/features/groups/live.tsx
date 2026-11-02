@@ -23,6 +23,7 @@ import { useSession } from '@/auth/session';
 import { apiRequest } from '@/api/client';
 import { groupResponse, useGroup, useGroups } from '@/api/groups';
 import { palette } from '@/lib/theme';
+import { ExpenseRows } from '@/features/expenses/live';
 
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : 'Please try again.';
@@ -289,10 +290,15 @@ export function LiveGroupScreen({ id }: { id: string }) {
           )}
         </Panel>
       )}
-      <EmptyState
-        title="Your group is ready."
-        description="Your people are all in one place. Shared expenses will appear here once expense tracking is available."
-      />
+      <SectionTitle>Shared expenses</SectionTitle>
+      <Button
+        onPress={() =>
+          router.push({ pathname: '/expense/new', params: { groupId: id } })
+        }
+      >
+        <Text>Add expense</Text>
+      </Button>
+      <ExpenseRows groupId={id} />
     </Screen>
   );
 }

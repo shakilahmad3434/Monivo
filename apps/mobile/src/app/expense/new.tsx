@@ -14,8 +14,20 @@ import {
 } from '@/components/screen';
 import { equalShares, memberName, money, parseAmount } from '@/demo/model';
 import { useDemo } from '@/demo/provider';
+import { useSession } from '@/auth/session';
+import { LiveExpenseFormScreen } from '@/features/expenses/live';
 
 export default function NewExpenseScreen() {
+  const { mode } = useSession();
+  const params = useLocalSearchParams<{ groupId?: string; editId?: string }>();
+  return mode === 'authenticated' ? (
+    <LiveExpenseFormScreen groupId={params.groupId} editId={params.editId} />
+  ) : (
+    <DemoNewExpenseScreen />
+  );
+}
+
+function DemoNewExpenseScreen() {
   const params = useLocalSearchParams<{ groupId?: string }>();
   const { state, addExpense } = useDemo();
   const initialGroup =

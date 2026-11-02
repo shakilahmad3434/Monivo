@@ -2,10 +2,12 @@
 
 Shared expense app. Phase 1 provides the development foundation, Phase 2 the
 interactive sample UI, and Phase 3 Google sign-in, profiles, and persistent groups
-with invitations. Real OAuth testing requires Google Cloud configuration and an
-Android development build. Expense/settlement APIs and payments come later.
+with invitations. Phase 4 adds persistent expenses, equal/custom splits, editing,
+deletion, and group balances. Google sign-in and the Phase 3 phone flows have been
+verified by the project owner. Real OAuth requires an Android development build.
+Payment recording and confirmation come later.
 
-See [Google sign-in setup and Phase 3 verification](docs/google-sign-in.md).
+See [Phase 4 scope and verification](docs/phase-4.md).
 
 ```text
 apps/
@@ -61,7 +63,7 @@ Invoke-RestMethod http://127.0.0.1:3000/health/ready
 Liveness returns 200 while the process serves requests. Readiness (also available
 at /health) returns 200 when Mongoose is connected and 503 when disconnected.
 SIGINT/SIGTERM closes the HTTP listener and database connection, with a bounded
-shutdown timeout. Real users/groups use /api; expense writes are not implemented.
+shutdown timeout. Real users, groups, and expenses use /api.
 
 ### Quality and build commands
 

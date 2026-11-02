@@ -12,6 +12,7 @@ import {
 import { modelsFor } from './models.js';
 import { ApiError } from './errors.js';
 import { googleVerifier, type VerifyGoogleToken } from './google.js';
+import { expenseRouter } from './expenses.js';
 
 const hash = (token: string) =>
   createHash('sha256').update(token).digest('hex');
@@ -212,5 +213,6 @@ export function createApiRouter(options: ApiOptions) {
       throw new ApiError(404, 'This invitation has expired or been revoked.');
     response.json({ group: await serializeGroup(group) });
   });
+  router.use(expenseRouter(options.connection));
   return router;
 }

@@ -52,3 +52,68 @@ export const invitePreviewSchema = z.object({
 export type Profile = z.infer<typeof profileSchema>;
 export type LiveGroup = z.infer<typeof groupSchema>;
 export type CreateGroupInput = z.input<typeof createGroupSchema>;
+
+// Money crosses the API boundary as integer paise, never floating point rupees.
+export const paiseSchema = z.number().int().min(1).max(100_000_000);
+export const expenseInputSchema = z
+  .object({
+    description: z.string().trim().min(1).max(80),
+    amount: paiseSchema,
+    payerId: objectIdSchema,
+    splitMode: z.enum(['equal', 'custom']),
+    shares: z
+      .array(
+        z
+          .object({
+            userId: objectIdSchema,
+            amount: z.number().int().min(0).max(100_000_000),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(200),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (
+      new Set(value.shares.map((s) => s.userId)).size !== value.shares.length ||
+      value.shares.reduce((sum, s) => sum + s.amount, 0) !== value.amount
+    )
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Unique shares must add up to the expense.',
+      });
+  });
+export const createExpenseSchema = z
+  .object({ requestId: z.uuid(), expense: expenseInputSchema })
+  .strict();
+export const updateExpenseSchema = z
+  .object({ version: z.number().int().min(1), expense: expenseInputSchema })
+  .strict();
+export const expenseSchema = z.object({
+  id: objectIdSchema,
+  groupId: objectIdSchema,
+  createdBy: objectIdSchema,
+  description: z.string(),
+  amount: paiseSchema,
+  payerId: objectIdSchema,
+  splitMode: z.enum(['equal', 'custom']),
+  shares: z.array(
+    z.object({ userId: objectIdSchema, amount: z.number().int().min(0) }),
+  ),
+  version: z.number().int(),
+  deleted: z.boolean(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export type ExpenseInput = z.infer<typeof expenseInputSchema>;
+export type LiveExpense = z.infer<typeof expenseSchema>;
+export function splitEqually(amount: number, ids: string[]) {
+  const sorted = [...ids].sort();
+  return sorted.map((userId, index) => ({
+    userId,
+    amount:
+      Math.floor(amount / sorted.length) +
+      (index < amount % sorted.length ? 1 : 0),
+  }));
+}

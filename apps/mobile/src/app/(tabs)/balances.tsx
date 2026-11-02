@@ -20,12 +20,12 @@ import {
 import { useDemo } from '@/demo/provider';
 import { palette } from '@/lib/theme';
 import { useSession } from '@/auth/session';
-import { LiveEmptyScreen } from '@/features/groups/live';
+import { LiveLedgerScreen } from '@/features/expenses/live';
 
 export default function BalancesScreen() {
   const { mode } = useSession();
   return mode === 'authenticated' ? (
-    <LiveEmptyScreen />
+    <LiveLedgerScreen />
   ) : (
     <DemoBalancesScreen />
   );

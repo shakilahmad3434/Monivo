@@ -11,8 +11,20 @@ import {
 } from '@/components/screen';
 import { memberName, money } from '@/demo/model';
 import { useDemo } from '@/demo/provider';
+import { useSession } from '@/auth/session';
+import { LiveExpenseScreen } from '@/features/expenses/live';
 
 export default function ExpenseScreen() {
+  const { mode } = useSession();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  return mode === 'authenticated' ? (
+    <LiveExpenseScreen id={id} />
+  ) : (
+    <DemoExpenseScreen />
+  );
+}
+
+function DemoExpenseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { state } = useDemo();
   const expense = state.expenses.find((item) => item.id === id);

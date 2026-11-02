@@ -55,9 +55,9 @@ function Navigator() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="group" />
         <Stack.Screen name="profile" />
+        <Stack.Screen name="expense" />
       </Stack.Protected>
       <Stack.Protected guard={mode === 'demo'}>
-        <Stack.Screen name="expense" />
         <Stack.Screen name="settlement" />
       </Stack.Protected>
     </Stack>

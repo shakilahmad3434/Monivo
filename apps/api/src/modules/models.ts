@@ -34,10 +34,38 @@ const groupSchema = new Schema(
 );
 groupSchema.index({ inviteHash: 1 }, { unique: true, sparse: true });
 
+const expenseSchema = new Schema(
+  {
+    groupId: { type: Schema.Types.ObjectId, required: true, index: true },
+    createdBy: { type: Schema.Types.ObjectId, required: true },
+    requestId: { type: String, required: true },
+    requestHash: { type: String, required: true },
+    description: { type: String, required: true },
+    amount: { type: Number, required: true },
+    payerId: { type: Schema.Types.ObjectId, required: true },
+    splitMode: { type: String, enum: ['equal', 'custom'], required: true },
+    shares: [
+      {
+        _id: false,
+        userId: { type: Schema.Types.ObjectId, required: true },
+        amount: { type: Number, required: true },
+      },
+    ],
+    version: { type: Number, default: 1 },
+    deleted: { type: Boolean, default: false },
+  },
+  { timestamps: true },
+);
+expenseSchema.index(
+  { createdBy: 1, groupId: 1, requestId: 1 },
+  { unique: true },
+);
+
 export function modelsFor(connection: Connection) {
   return {
     User: connection.model('User', userSchema),
     Session: connection.model('Session', sessionSchema),
     Group: connection.model('Group', groupSchema),
+    Expense: connection.model('Expense', expenseSchema),
   };
 }
