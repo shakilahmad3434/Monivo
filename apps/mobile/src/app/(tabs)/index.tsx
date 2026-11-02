@@ -16,8 +16,15 @@ import {
 import { useDemo } from '@/demo/provider';
 import { balancesForGroup, money } from '@/demo/model';
 import { palette } from '@/lib/theme';
+import { useSession } from '@/auth/session';
+import { LiveGroupsScreen } from '@/features/groups/live';
 
 export default function GroupsScreen() {
+  const { mode } = useSession();
+  return mode === 'authenticated' ? <LiveGroupsScreen /> : <DemoGroupsScreen />;
+}
+
+function DemoGroupsScreen() {
   const { state } = useDemo();
   const [filter, setFilter] = useState('All groups');
   const groups = state.groups.map((group) => ({
@@ -47,7 +54,15 @@ export default function GroupsScreen() {
     <Screen
       title="Life happens. Split it."
       subtitle="Your people. Your plans. All in one place."
-      action={<Avatar name="You" />}
+      action={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Sample app profile"
+          onPress={() => router.push('/profile')}
+        >
+          <Avatar name="You" />
+        </Pressable>
+      }
     >
       <DemoNotice />
       <View className="relative overflow-hidden gap-5 rounded-[28px] bg-ink p-6">

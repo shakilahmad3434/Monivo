@@ -1,5 +1,8 @@
 import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { Suspense } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SessionProvider, useSession } from '@/auth/session';
+import { ApiError } from '@/api/client';
 import { StatusBar } from 'expo-status-bar';
 import '../../global.css';
 import { DemoProvider } from '@/demo/provider';
@@ -12,7 +15,7 @@ export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
   return (
     <Screen title="Let's try that again.">
       <ErrorState
-        message="We couldn't show this screen. Try reloading your sample space."
+        message="We couldn't show this screen. Please try again."
         onRetry={retry}
         actionLabel="Try again"
       />
@@ -20,27 +23,67 @@ export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
   );
 }
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 15000,
+      retry: (count, error) =>
+        !(error instanceof ApiError && error.status < 500) && count < 1,
+    },
+    mutations: { retry: false },
+  },
+});
+
+function Navigator() {
+  const { mode, ready } = useSession();
+  if (!ready)
+    return (
+      <Screen title="Welcome to Monivo">
+        <LoadingState />
+      </Screen>
+    );
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: palette.background },
+      }}
+    >
+      <Stack.Screen name="login" />
+      <Stack.Screen name="join/[token]" />
+      <Stack.Protected guard={mode !== 'signedOut'}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="group" />
+        <Stack.Screen name="profile" />
+      </Stack.Protected>
+      <Stack.Protected guard={mode === 'demo'}>
+        <Stack.Screen name="expense" />
+        <Stack.Screen name="settlement" />
+      </Stack.Protected>
+    </Stack>
+  );
+}
+
 export default function RootLayout() {
   return (
-    <DemoProvider>
-      <ThemeProvider value={NAV_THEME}>
-        <StatusBar style="dark" />
-        <Suspense
-          fallback={
-            <Screen title="Welcome to Monivo">
-              <LoadingState />
-            </Screen>
-          }
-        >
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: palette.background },
-            }}
-          />
-        </Suspense>
-        <PortalHost />
-      </ThemeProvider>
-    </DemoProvider>
+    <QueryClientProvider client={queryClient}>
+      <SessionProvider>
+        <DemoProvider>
+          <ThemeProvider value={NAV_THEME}>
+            <StatusBar style="dark" />
+            <Suspense
+              fallback={
+                <Screen title="Welcome to Monivo">
+                  <LoadingState />
+                </Screen>
+              }
+            >
+              <Navigator />
+            </Suspense>
+            <PortalHost />
+          </ThemeProvider>
+        </DemoProvider>
+      </SessionProvider>
+    </QueryClientProvider>
   );
 }

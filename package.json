@@ -14,6 +14,8 @@
     "pretypecheck": "pnpm build:shared",
     "pretest": "pnpm build:shared",
     "dev:mobile": "pnpm --filter @monivo/mobile start",
+    "predev:mobile:client": "pnpm build:shared",
+    "dev:mobile:client": "pnpm --filter @monivo/mobile start:client",
     "dev:api": "pnpm --filter @monivo/api dev",
     "build:api": "pnpm --filter @monivo/api build",
     "typecheck": "pnpm -r typecheck",

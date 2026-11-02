@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import mongoose from 'mongoose';
 import { createApp } from './app.js';
 import { parseEnvironment } from './config.js';
+import { modelsFor } from './modules/models.js';
 
 async function start() {
   const config = parseEnvironment(process.env);
@@ -10,8 +11,15 @@ async function start() {
   await mongoose.connect(config.MONGODB_URI, {
     serverSelectionTimeoutMS: 5000,
   });
+  await Promise.all(
+    Object.values(modelsFor(mongoose.connection)).map((model) => model.init()),
+  );
   const server = createServer(
-    createApp(() => mongoose.connection.readyState === 1),
+    createApp(() => mongoose.connection.readyState === 1, {
+      connection: mongoose.connection,
+      googleClientId: config.GOOGLE_WEB_CLIENT_ID,
+      sessionDays: config.SESSION_DAYS,
+    }),
   );
   let stopping = false;
 

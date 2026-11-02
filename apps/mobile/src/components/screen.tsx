@@ -296,7 +296,7 @@ export function LoadingState() {
   return (
     <View
       accessibilityRole="progressbar"
-      accessibilityLabel="Loading sample space"
+      accessibilityLabel="Loading Monivo"
       className="gap-4 py-8"
     >
       <ActivityIndicator color={palette.primary} />

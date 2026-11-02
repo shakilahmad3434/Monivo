@@ -19,8 +19,19 @@ import {
 } from '@/demo/model';
 import { useDemo } from '@/demo/provider';
 import { palette } from '@/lib/theme';
+import { useSession } from '@/auth/session';
+import { LiveEmptyScreen } from '@/features/groups/live';
 
 export default function BalancesScreen() {
+  const { mode } = useSession();
+  return mode === 'authenticated' ? (
+    <LiveEmptyScreen />
+  ) : (
+    <DemoBalancesScreen />
+  );
+}
+
+function DemoBalancesScreen() {
   const { state, respondToPayment } = useDemo();
   const pending = state.settlements.filter(
     (payment) => payment.status === 'pending',

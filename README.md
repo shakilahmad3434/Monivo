@@ -1,8 +1,11 @@
 # Monivo
 
-Shared expense app. Phase 1 provides the development foundation. Phase 2 adds
-interactive mobile screens backed by sample data. Authentication, persistent
-group/expense APIs, and payment integrations are not implemented yet.
+Shared expense app. Phase 1 provides the development foundation, Phase 2 the
+interactive sample UI, and Phase 3 Google sign-in, profiles, and persistent groups
+with invitations. Real OAuth testing requires Google Cloud configuration and an
+Android development build. Expense/settlement APIs and payments come later.
+
+See [Google sign-in setup and Phase 3 verification](docs/google-sign-in.md).
 
 ```text
 apps/
@@ -42,7 +45,8 @@ a configured Android emulator. Expo Go and the project's SDK must match. If Expo
 Go does not support this SDK on your device, use an Expo development build. Native
 Android builds require the Android SDK; local iOS builds require macOS.
 
-The mobile app runs independently with in-memory sample data. It does not call the API.
+The login screen offers an explicitly marked sample app that runs independently
+with in-memory data. Configured Google sign-in uses the API for real groups.
 For future physical-device API calls, localhost points to the phone; use your
 computer's LAN address and configure API HOST/firewall accordingly. Never expose
 MongoDB to the phone. No backend credentials belong in the mobile environment.
@@ -57,7 +61,7 @@ Invoke-RestMethod http://127.0.0.1:3000/health/ready
 Liveness returns 200 while the process serves requests. Readiness (also available
 at /health) returns 200 when Mongoose is connected and 503 when disconnected.
 SIGINT/SIGTERM closes the HTTP listener and database connection, with a bounded
-shutdown timeout. No expense data or user routes exist yet.
+shutdown timeout. Real users/groups use /api; expense writes are not implemented.
 
 ### Quality and build commands
 
@@ -99,11 +103,11 @@ on a Unix deployment host.
   blue, peach, lavender, and yellow accents inspired by https://vibrant.design/.
   Text, Button, and Input are adapted
   from React Native Reusables, with its license retained beside the components.
-- TanStack Form handles expense form state. TanStack Query is intentionally not
-  installed until the mobile app actually fetches API data.
+- TanStack Form handles sample expense form state. Phase 3 uses TanStack Query
+  for real group/profile data and mutations.
 
-Sample members represent registered accounts; this preview performs no real login,
-invitation, or account creation. Demo changes disappear on reload/restart. The
+Sample members are fictional fixtures, separate from the real registered accounts
+used in Phase 3. Demo changes disappear on reload/restart. The
 calculation helpers in src/demo are UI fixtures, not authoritative backend logic.
 The fixed light palette is centralized in src/lib/colors.json and consumed by
 tailwind.config.js and src/lib/theme.ts. The Reusables

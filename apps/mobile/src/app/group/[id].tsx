@@ -16,8 +16,20 @@ import {
 import { balancesForGroup, memberName, money } from '@/demo/model';
 import { useDemo } from '@/demo/provider';
 import { palette } from '@/lib/theme';
+import { useSession } from '@/auth/session';
+import { LiveGroupScreen } from '@/features/groups/live';
 
 export default function GroupScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { mode } = useSession();
+  return mode === 'authenticated' ? (
+    <LiveGroupScreen id={id} />
+  ) : (
+    <DemoGroupScreen />
+  );
+}
+
+function DemoGroupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { state } = useDemo();
   const group = state.groups.find((item) => item.id === id);

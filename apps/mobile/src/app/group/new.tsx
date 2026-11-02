@@ -13,8 +13,19 @@ import {
 } from '@/components/screen';
 import { members } from '@/demo/model';
 import { useDemo } from '@/demo/provider';
+import { useSession } from '@/auth/session';
+import { LiveNewGroupScreen } from '@/features/groups/live';
 
 export default function NewGroupScreen() {
+  const { mode } = useSession();
+  return mode === 'authenticated' ? (
+    <LiveNewGroupScreen />
+  ) : (
+    <DemoNewGroupScreen />
+  );
+}
+
+function DemoNewGroupScreen() {
   const { addGroup } = useDemo();
   const [name, setName] = useState('');
   const [selected, setSelected] = useState<string[]>(['you']);

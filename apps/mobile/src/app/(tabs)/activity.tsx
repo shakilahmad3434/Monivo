@@ -11,8 +11,19 @@ import {
 } from '@/components/screen';
 import { memberName, money } from '@/demo/model';
 import { useDemo } from '@/demo/provider';
+import { useSession } from '@/auth/session';
+import { LiveEmptyScreen } from '@/features/groups/live';
 
 export default function ActivityScreen() {
+  const { mode } = useSession();
+  return mode === 'authenticated' ? (
+    <LiveEmptyScreen activity />
+  ) : (
+    <DemoActivityScreen />
+  );
+}
+
+function DemoActivityScreen() {
   const { state } = useDemo();
   const activity = [
     ...state.expenses.map((expense) => ({

@@ -7,6 +7,19 @@
     "orientation": "portrait",
     "icon": "./assets/images/monivo-icon.png",
     "userInterfaceStyle": "light",
-    "plugins": ["expo-router"]
+    "android": {
+      "package": "com.monivo.app"
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "411d3f74-671b-46c6-8813-4c8ca6a71c40"
+      }
+    }
   }
 }
