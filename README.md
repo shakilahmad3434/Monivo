@@ -9,8 +9,10 @@ Phase 5 adds partial/full payment records, recipient confirmation, rejection,
 cancellation, payment history, and expense protection during settlement.
 Phase 6 adds optional UPI IDs, recipient review, and an Android UPI-app handoff
 with a manual payment-recording fallback.
+Phase 7 adds owner-managed group names, ownership transfer, and safe leaving
+with balance/payment checks and preserved member history.
 
-See [Phase 6 scope and manual verification](docs/phase-6.md).
+See [Phase 7 scope and manual verification](docs/phase-7.md).
 
 ```text
 apps/

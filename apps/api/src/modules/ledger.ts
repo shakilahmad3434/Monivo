@@ -89,6 +89,15 @@ export async function assertExpenseUnlocked(
 ) {
   if (
     await modelsFor(connection)
+      .Expense.exists({ _id: id, lockedByDeparture: true })
+      .session(session)
+  )
+    throw new ApiError(
+      409,
+      'This expense is protected because a member left the group. Add a correction expense instead.',
+    );
+  if (
+    await modelsFor(connection)
       .Payment.exists({
         expenseIds: id,
         status: { $in: ['pending', 'confirmed'] },

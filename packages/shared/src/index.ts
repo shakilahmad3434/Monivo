@@ -31,6 +31,7 @@ export const groupSchema = z.object({
   kind: z.enum(['home', 'trip', 'friends']),
   ownerId: objectIdSchema,
   members: z.array(memberSchema),
+  formerMembers: z.array(memberSchema).default([]),
 });
 export const createGroupSchema = z
   .object({
@@ -64,6 +65,10 @@ export const invitePreviewSchema = z.object({
 export type Profile = z.infer<typeof profileSchema>;
 export type LiveGroup = z.infer<typeof groupSchema>;
 export type CreateGroupInput = z.input<typeof createGroupSchema>;
+export const renameGroupSchema = createGroupSchema.pick({ name: true });
+export const transferGroupSchema = z
+  .object({ newOwnerId: objectIdSchema })
+  .strict();
 
 // Money crosses the API boundary as integer paise, never floating point rupees.
 export const paiseSchema = z.number().int().min(1).max(100_000_000);

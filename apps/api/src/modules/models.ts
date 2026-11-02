@@ -31,6 +31,8 @@ const groupSchema = new Schema(
     inviteHash: { type: String, select: false },
     inviteExpiresAt: Date,
     ledgerVersion: { type: Number, default: 0 },
+    formerMemberIds: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    closedAt: Date,
   },
   { timestamps: true },
 );
@@ -55,6 +57,7 @@ const expenseSchema = new Schema(
     ],
     version: { type: Number, default: 1 },
     deleted: { type: Boolean, default: false },
+    lockedByDeparture: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

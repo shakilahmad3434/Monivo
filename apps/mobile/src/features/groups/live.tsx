@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -24,6 +24,7 @@ import { apiRequest } from '@/api/client';
 import { groupResponse, useGroup, useGroups } from '@/api/groups';
 import { palette } from '@/lib/theme';
 import { ExpenseRows } from '@/features/expenses/live';
+import { GroupSettings } from './settings';
 
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : 'Please try again.';
@@ -181,6 +182,18 @@ export function LiveGroupScreen({ id }: { id: string }) {
       apiRequest(`/groups/${id}/invite`, null, { method: 'DELETE', token }),
     onSuccess: () => invite.reset(),
   });
+  const ownerId = query.data?.group.ownerId;
+  const formerMemberKey = query.data?.group.formerMembers
+    .map((member) => member.id)
+    .sort()
+    .join(',');
+  const resetInvite = invite.reset;
+  const resetRevoke = revoke.reset;
+  useEffect(() => {
+    resetInvite();
+    resetRevoke();
+    setShareError('');
+  }, [ownerId, formerMemberKey, resetInvite, resetRevoke]);
   if (query.isPending)
     return (
       <Screen title="Your group" back>
@@ -208,6 +221,13 @@ export function LiveGroupScreen({ id }: { id: string }) {
       back
     >
       <SectionTitle>Your people</SectionTitle>
+      <Button
+        variant="ghost"
+        disabled={query.isFetching}
+        onPress={() => void query.refetch()}
+      >
+        <Text>{query.isFetching ? 'Refreshing…' : 'Refresh group'}</Text>
+      </Button>
       <Panel>
         {group.members.map((member) => (
           <View key={member.id} className="flex-row items-center gap-3">
@@ -222,6 +242,16 @@ export function LiveGroupScreen({ id }: { id: string }) {
           </View>
         ))}
       </Panel>
+      {group.formerMembers.length > 0 && (
+        <Panel>
+          <Text className="text-sm font-semibold">Former members</Text>
+          {group.formerMembers.map((member) => (
+            <Text key={member.id} className="text-sm text-muted-foreground">
+              {member.name} · left the group
+            </Text>
+          ))}
+        </Panel>
+      )}
       {group.ownerId === user?.id && (
         <Panel>
           <SectionTitle>Bring everyone in.</SectionTitle>
@@ -299,6 +329,15 @@ export function LiveGroupScreen({ id }: { id: string }) {
         <Text>Add expense</Text>
       </Button>
       <ExpenseRows groupId={id} />
+      <GroupSettings
+        key={`${group.id}-${group.ownerId}-${group.name}`}
+        group={group}
+        onTransfer={() => {
+          invite.reset();
+          revoke.reset();
+          setShareError('');
+        }}
+      />
     </Screen>
   );
 }

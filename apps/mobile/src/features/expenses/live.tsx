@@ -85,8 +85,8 @@ export function LiveExpenseFormScreen({
       <Screen title="Expense protected" back>
         <Panel>
           <Text>
-            This expense is covered by a pending or confirmed payment. It cannot
-            be edited. Add a correction expense instead.
+            This expense is protected by a payment or member departure. Add a
+            correction expense instead.
           </Text>
         </Panel>
       </Screen>
@@ -517,7 +517,10 @@ export function LiveExpenseScreen({ id }: { id: string }) {
     );
   const e = query.data.expense;
   const name = (id: string) =>
-    group.data?.group.members.find((m) => m.id === id)?.name ?? 'Member';
+    [
+      ...(group.data?.group.members ?? []),
+      ...(group.data?.group.formerMembers ?? []),
+    ].find((m) => m.id === id)?.name ?? 'Member';
   return (
     <Screen title={e.description} subtitle={group.data?.group.name} back>
       <Panel>
@@ -541,7 +544,7 @@ export function LiveExpenseScreen({ id }: { id: string }) {
       {e.locked && (
         <Panel>
           <Text>
-            This expense is covered by a pending or confirmed payment. Add a
+            This expense is protected by a payment or member departure. Add a
             correction expense if anything needs adjusting.
           </Text>
         </Panel>

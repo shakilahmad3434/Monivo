@@ -35,6 +35,7 @@ export function expenseRouter(connection: Connection) {
     })),
     version: e.version,
     deleted: e.deleted,
+    locked: e.lockedByDeparture,
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
   });
@@ -125,10 +126,12 @@ export function expenseRouter(connection: Connection) {
     });
     if (!record) throw new ApiError(404, 'Expense not found.');
     await member(record.groupId.toString(), res.locals.user.id);
-    const locked = !!(await Payment.exists({
-      expenseIds: record._id,
-      status: { $in: ['pending', 'confirmed'] },
-    }));
+    const locked =
+      record.lockedByDeparture ||
+      !!(await Payment.exists({
+        expenseIds: record._id,
+        status: { $in: ['pending', 'confirmed'] },
+      }));
     res.json({ expense: { ...serialize(record), locked } });
   });
   router.patch('/expenses/:id', async (req, res) => {
@@ -213,7 +216,9 @@ export function expenseRouter(connection: Connection) {
           expenses.push(...ledger.expenses.map(serialize));
           payments.push(...ledger.payments.map(serializePayment));
           const users = await modelsFor(connection)
-            .User.find({ _id: { $in: group.memberIds } })
+            .User.find({
+              _id: { $in: [...group.memberIds, ...group.formerMemberIds] },
+            })
             .select('name')
             .session(session);
           balances.push({

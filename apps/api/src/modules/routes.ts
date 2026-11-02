@@ -8,12 +8,15 @@ import {
   inviteTokenSchema,
   objectIdSchema,
   updateProfileSchema,
+  renameGroupSchema,
+  transferGroupSchema,
 } from '@monivo/shared';
 import { modelsFor } from './models.js';
 import { ApiError } from './errors.js';
 import { googleVerifier, type VerifyGoogleToken } from './google.js';
 import { expenseRouter } from './expenses.js';
 import { paymentRouter } from './payments.js';
+import { groupLedger, writeLedger } from './ledger.js';
 
 const hash = (token: string) =>
   createHash('sha256').update(token).digest('hex');
@@ -119,8 +122,12 @@ export function createApiRouter(options: ApiOptions) {
     kind: string;
     ownerId: Types.ObjectId;
     memberIds: Types.ObjectId[];
+    formerMemberIds: Types.ObjectId[];
   }) {
     const members = await User.find({ _id: { $in: group.memberIds } })
+      .select('name')
+      .lean();
+    const former = await User.find({ _id: { $in: group.formerMemberIds } })
       .select('name')
       .lean();
     return {
@@ -132,6 +139,11 @@ export function createApiRouter(options: ApiOptions) {
         id: member._id.toString(),
         name: member.name,
       })),
+      formerMembers: former
+        .filter(
+          (member) => !group.memberIds.some((id) => id.equals(member._id)),
+        )
+        .map((member) => ({ id: member._id.toString(), name: member.name })),
     };
   }
   router.get('/groups', async (_request, response) => {
@@ -158,6 +170,128 @@ export function createApiRouter(options: ApiOptions) {
     });
     if (!group) throw new ApiError(404, 'Group not found.');
     response.json({ group: await serializeGroup(group) });
+  });
+  router.patch('/groups/:id', async (request, response) => {
+    const id = objectIdSchema.parse(request.params.id);
+    const input = renameGroupSchema.parse(request.body);
+    await writeLedger(
+      options.connection,
+      id,
+      response.locals.user.id,
+      async (session, group) => {
+        if (group.ownerId.toString() !== response.locals.user.id)
+          throw new ApiError(403, 'Only the group owner can rename it.');
+        group.name = input.name;
+        await group.save({ session });
+      },
+    );
+    response.status(204).end();
+  });
+  router.post('/groups/:id/owner', async (request, response) => {
+    const id = objectIdSchema.parse(request.params.id);
+    const { newOwnerId } = transferGroupSchema.parse(request.body);
+    await writeLedger(
+      options.connection,
+      id,
+      response.locals.user.id,
+      async (session, group) => {
+        if (group.ownerId.toString() !== response.locals.user.id)
+          throw new ApiError(
+            403,
+            'Only the group owner can transfer ownership.',
+          );
+        if (
+          newOwnerId === response.locals.user.id ||
+          !group.memberIds.some((id) => id.toString() === newOwnerId)
+        )
+          throw new ApiError(400, 'Choose another current member.');
+        group.ownerId = group.memberIds.find(
+          (id) => id.toString() === newOwnerId,
+        )!;
+        group.inviteHash = undefined;
+        group.inviteExpiresAt = undefined;
+        await group.save({ session });
+      },
+    );
+    response.status(204).end();
+  });
+  router.post('/groups/:id/leave', async (request, response) => {
+    const id = objectIdSchema.parse(request.params.id);
+    try {
+      await writeLedger(
+        options.connection,
+        id,
+        response.locals.user.id,
+        async (session, group) => {
+          const userId = response.locals.user.id as string;
+          if (group.ownerId.toString() === userId && group.memberIds.length > 1)
+            throw new ApiError(
+              409,
+              'Transfer ownership to another member before leaving.',
+            );
+          const ledger = await groupLedger(options.connection, group, session);
+          if (ledger.members.find((m) => m.userId === userId)?.amount !== 0)
+            throw new ApiError(
+              409,
+              'Settle your balance before leaving. Both money owed and money due must be zero.',
+            );
+          if (
+            ledger.payments.some(
+              (p) =>
+                p.status === 'pending' &&
+                (p.fromId.toString() === userId ||
+                  p.toId.toString() === userId),
+            )
+          )
+            throw new ApiError(
+              409,
+              'Resolve your pending payments before leaving.',
+            );
+          // Freeze history that could otherwise recreate a departed member's balance.
+          await modelsFor(options.connection).Expense.updateMany(
+            {
+              groupId: id,
+              deleted: false,
+              $or: [
+                { payerId: userId },
+                { shares: { $elemMatch: { userId, amount: { $gt: 0 } } } },
+              ],
+            },
+            { $set: { lockedByDeparture: true } },
+            { session, timestamps: false },
+          );
+          if (
+            !group.formerMemberIds.some(
+              (member) => member.toString() === userId,
+            )
+          )
+            group.formerMemberIds.push(response.locals.user._id);
+          group.memberIds = group.memberIds.filter(
+            (member) => member.toString() !== userId,
+          );
+          // Revoke the departing member's previously shared links. Remaining owners
+          // can issue a fresh invite; an empty group is permanently closed.
+          group.inviteHash = undefined;
+          group.inviteExpiresAt = undefined;
+          if (group.memberIds.length === 0) group.closedAt = new Date();
+          await group.save({ session });
+        },
+      );
+    } catch (error) {
+      // A successful departure may have lost its HTTP response. A retry by
+      // that former member is safe; outsiders still receive 404.
+      if (!(
+        error instanceof ApiError &&
+        error.status === 404 &&
+        (await Group.exists({
+          _id: id,
+          formerMemberIds: response.locals.user._id,
+          memberIds: { $ne: response.locals.user._id },
+        }))
+      ))
+        throw error;
+    }
+    response.status(204).end();
   });
   router.get(
     '/groups/:id/payment-recipient/:userId',
@@ -221,6 +355,7 @@ export function createApiRouter(options: ApiOptions) {
     const group = await Group.findOne({
       inviteHash: hash(token),
       inviteExpiresAt: { $gt: new Date() },
+      closedAt: { $exists: false },
     });
     if (!group)
       throw new ApiError(404, 'This invitation has expired or been revoked.');
@@ -233,7 +368,11 @@ export function createApiRouter(options: ApiOptions) {
   router.post('/invitations/:token/join', async (request, response) => {
     const token = inviteTokenSchema.parse(request.params.token);
     const group = await Group.findOneAndUpdate(
-      { inviteHash: hash(token), inviteExpiresAt: { $gt: new Date() } },
+      {
+        inviteHash: hash(token),
+        inviteExpiresAt: { $gt: new Date() },
+        closedAt: { $exists: false },
+      },
       { $addToSet: { memberIds: response.locals.user._id } },
       { returnDocument: 'after' },
     );
