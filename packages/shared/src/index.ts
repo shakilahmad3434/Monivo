@@ -10,12 +10,21 @@ export type HealthResponse = z.infer<typeof healthResponseSchema>;
 
 export const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i);
 export const inviteTokenSchema = z.string().regex(/^[a-f\d]{64}$/);
+// Format validation only; ownership/existence must be checked in the payment app.
+export const upiIdSchema = z
+  .string()
+  .trim()
+  .min(3)
+  .max(100)
+  .regex(/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+$/)
+  .transform((value) => value.toLowerCase());
 export const profileSchema = z.object({
   id: objectIdSchema,
   name: z.string(),
   email: z.email(),
+  upiId: upiIdSchema.nullable().default(null),
 });
-export const memberSchema = profileSchema.omit({ email: true });
+export const memberSchema = profileSchema.omit({ email: true, upiId: true });
 export const groupSchema = z.object({
   id: objectIdSchema,
   name: z.string(),
@@ -30,7 +39,10 @@ export const createGroupSchema = z
   })
   .strict();
 export const updateProfileSchema = z
-  .object({ name: z.string().trim().min(1).max(50) })
+  .object({
+    name: z.string().trim().min(1).max(50),
+    upiId: upiIdSchema.nullable().optional(),
+  })
   .strict();
 export const googleLoginSchema = z
   .object({ idToken: z.string().min(1).max(10000) })
@@ -140,3 +152,9 @@ export const paymentSchema = z.object({
   updatedAt: z.iso.datetime(),
 });
 export type LivePayment = z.infer<typeof paymentSchema>;
+
+export const paymentRecipientSchema = z.object({
+  id: objectIdSchema,
+  name: z.string(),
+  upiId: upiIdSchema.nullable(),
+});

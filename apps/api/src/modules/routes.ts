@@ -33,7 +33,13 @@ export function createApiRouter(options: ApiOptions) {
     _id: Types.ObjectId;
     name: string;
     email: string;
-  }) => ({ id: user._id.toString(), name: user.name, email: user.email });
+    upiId?: string | null;
+  }) => ({
+    id: user._id.toString(),
+    name: user.name,
+    email: user.email,
+    upiId: user.upiId ?? null,
+  });
   const requireAuth: RequestHandler = async (request, response, next) => {
     const match = /^Bearer ([a-f\d]{64})$/.exec(
       request.headers.authorization ?? '',
@@ -153,6 +159,27 @@ export function createApiRouter(options: ApiOptions) {
     if (!group) throw new ApiError(404, 'Group not found.');
     response.json({ group: await serializeGroup(group) });
   });
+  router.get(
+    '/groups/:id/payment-recipient/:userId',
+    async (request, response) => {
+      const id = objectIdSchema.parse(request.params.id);
+      const userId = objectIdSchema.parse(request.params.userId);
+      const group = await Group.findOne({
+        _id: id,
+        memberIds: { $all: [response.locals.user._id, userId] },
+      });
+      if (!group) throw new ApiError(404, 'Group member not found.');
+      const recipient = await User.findById(userId).select('name upiId');
+      if (!recipient) throw new ApiError(404, 'Group member not found.');
+      response.json({
+        recipient: {
+          id: recipient.id,
+          name: recipient.name,
+          upiId: recipient.upiId ?? null,
+        },
+      });
+    },
+  );
   router.post('/groups/:id/invite', async (request, response) => {
     const id = objectIdSchema.parse(request.params.id);
     const token = randomBytes(32).toString('hex');

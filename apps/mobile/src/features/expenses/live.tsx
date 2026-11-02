@@ -28,6 +28,7 @@ import {
 import { useSession } from '@/auth/session';
 import { apiRequest, ApiError } from '@/api/client';
 import { useGroup, useGroups } from '@/api/groups';
+import { UpiReminderNotice } from '@/features/payments/upi';
 import {
   PaymentHistory,
   PaymentOptions,
@@ -609,6 +610,7 @@ export function LiveLedgerScreen({ activity = false }: { activity?: boolean }) {
       }
     >
       <UnfinishedPaymentNotice key={query.dataUpdatedAt} />
+      <UpiReminderNotice key={`upi-${query.dataUpdatedAt}`} />
       <Button
         variant="ghost"
         disabled={query.isFetching}

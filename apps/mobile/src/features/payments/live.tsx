@@ -24,6 +24,7 @@ import {
 import { useSession } from '@/auth/session';
 import { ApiError, apiRequest } from '@/api/client';
 import { money, parsePaise, useLedger } from '@/api/expenses';
+import { clearUpiReminder, UpiHandoff } from './upi';
 
 type Balance = NonNullable<
   ReturnType<typeof useLedger>['data']
@@ -296,6 +297,12 @@ export function LiveSettlementScreen({
         { token, method: 'POST', body },
       );
       await SecureStore.deleteItemAsync(key);
+      // Reminder cleanup must not turn a successfully saved payment into a failed save.
+      try {
+        await clearUpiReminder(user!.id, groupId, request.toId);
+      } catch {
+        /* The reminder can be cleared manually. */
+      }
       return result;
     },
     onSuccess: async () => {
@@ -396,10 +403,19 @@ export function LiveSettlementScreen({
         </Text>
       </Panel>
       {maximum <= 0 ? (
-        <EmptyState
-          title="Nothing more to record."
-          description="Refresh balances to check pending payments and recent changes."
-        />
+        <>
+          <EmptyState
+            title="Nothing more to record."
+            description="Refresh balances to check pending payments and recent changes."
+          />
+          <UpiHandoff
+            groupId={groupId}
+            toId={toId}
+            amount={parsePaise(amount)}
+            maximum={maximum}
+            onRestore={(value) => setAmount((value / 100).toFixed(2))}
+          />
+        </>
       ) : (
         <>
           <Panel>
@@ -418,6 +434,13 @@ export function LiveSettlementScreen({
               <Text>Use full amount · {money(maximum)}</Text>
             </Button>
           </Panel>
+          <UpiHandoff
+            groupId={groupId}
+            toId={toId}
+            amount={parsePaise(amount)}
+            maximum={maximum}
+            onRestore={(value) => setAmount((value / 100).toFixed(2))}
+          />
           <Text className="text-sm text-muted-foreground">
             Record only after paying outside Monivo. {recipient.name} must
             confirm receipt before balances change. Monivo does not transfer or

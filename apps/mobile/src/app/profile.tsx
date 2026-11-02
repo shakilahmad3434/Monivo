@@ -13,11 +13,17 @@ import { apiRequest } from '@/api/client';
 export default function ProfileScreen() {
   const session = useSession();
   const [name, setName] = useState(session.user?.name ?? '');
+  const [upiId, setUpiId] = useState(session.user?.upiId ?? '');
   const save = useMutation({
     mutationFn: async () => {
-      const parsed = updateProfileSchema.safeParse({ name });
+      const parsed = updateProfileSchema.safeParse({
+        name,
+        upiId: upiId.trim() || null,
+      });
       if (!parsed.success)
-        throw new Error('Use a name between 1 and 50 characters.');
+        throw new Error(
+          'Use a name between 1 and 50 characters and a valid UPI ID such as name@bank, or leave it blank.',
+        );
       return apiRequest('/me', z.object({ user: profileSchema }), {
         method: 'PATCH',
         token: session.token,
@@ -46,6 +52,21 @@ export default function ProfileScreen() {
           />
           <Text className="text-sm text-muted-foreground">
             {session.user.email}
+          </Text>
+          <Text className="text-sm font-semibold">UPI ID (optional)</Text>
+          <Input
+            accessibilityLabel="Your UPI ID"
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={100}
+            placeholder="yourname@bank"
+            value={upiId}
+            onChangeText={setUpiId}
+          />
+          <Text className="text-sm text-muted-foreground">
+            Group members can see this when paying you. Monivo checks the
+            format, not bank ownership. Verify the ID in your UPI app before
+            saving. Leave blank to remove it, then save your profile.
           </Text>
           <Button disabled={save.isPending} onPress={() => save.mutate()}>
             <Text>{save.isPending ? 'Saving…' : 'Save profile'}</Text>

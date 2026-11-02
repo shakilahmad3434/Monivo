@@ -5,6 +5,7 @@ const userSchema = new Schema(
     googleSub: { type: String, required: true, unique: true, select: false },
     email: { type: String, required: true },
     name: { type: String, required: true },
+    upiId: { type: String, default: null },
   },
   { timestamps: true },
 );

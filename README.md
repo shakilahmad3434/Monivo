@@ -7,8 +7,10 @@ deletion, and group balances. Google sign-in and the Phase 3 phone flows have be
 verified by the project owner. Real OAuth requires an Android development build.
 Phase 5 adds partial/full payment records, recipient confirmation, rejection,
 cancellation, payment history, and expense protection during settlement.
+Phase 6 adds optional UPI IDs, recipient review, and an Android UPI-app handoff
+with a manual payment-recording fallback.
 
-See [Phase 5 scope and manual verification](docs/phase-5.md).
+See [Phase 6 scope and manual verification](docs/phase-6.md).
 
 ```text
 apps/
