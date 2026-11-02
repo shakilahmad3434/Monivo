@@ -29,6 +29,11 @@ import { useSession } from '@/auth/session';
 import { apiRequest, ApiError } from '@/api/client';
 import { useGroup, useGroups } from '@/api/groups';
 import {
+  PaymentHistory,
+  PaymentOptions,
+  UnfinishedPaymentNotice,
+} from '@/features/payments/live';
+import {
   expenseResponse,
   money,
   parsePaise,
@@ -74,6 +79,17 @@ export function LiveExpenseFormScreen({
       </Screen>
     );
   const expense = editId ? existing.data?.expense : undefined;
+  if (expense?.locked)
+    return (
+      <Screen title="Expense protected" back>
+        <Panel>
+          <Text>
+            This expense is covered by a pending or confirmed payment. It cannot
+            be edited. Add a correction expense instead.
+          </Text>
+        </Panel>
+      </Screen>
+    );
   const group = groups.data?.groups.find(
     (g) => g.id === (expense?.groupId ?? groupId),
   );
@@ -521,7 +537,15 @@ export function LiveExpenseScreen({ id }: { id: string }) {
           </View>
         ))}
       </Panel>
-      {e.createdBy === user?.id && (
+      {e.locked && (
+        <Panel>
+          <Text>
+            This expense is covered by a pending or confirmed payment. Add a
+            correction expense if anything needs adjusting.
+          </Text>
+        </Panel>
+      )}
+      {e.createdBy === user?.id && !e.locked && (
         <>
           <Button
             onPress={() =>
@@ -580,10 +604,11 @@ export function LiveLedgerScreen({ activity = false }: { activity?: boolean }) {
       title={activity ? 'The little details.' : 'A clear balance.'}
       subtitle={
         activity
-          ? 'Your group expenses, together.'
+          ? 'Expenses and recorded payments, together.'
           : 'Your net position in each group.'
       }
     >
+      <UnfinishedPaymentNotice key={query.dataUpdatedAt} />
       <Button
         variant="ghost"
         disabled={query.isFetching}
@@ -600,10 +625,14 @@ export function LiveLedgerScreen({ activity = false }: { activity?: boolean }) {
         />
       ) : activity ? (
         <>
-          {!query.data.expenses.length && (
+          <PaymentHistory
+            payments={query.data.payments}
+            groups={query.data.balances}
+          />
+          {!query.data.expenses.length && !query.data.payments.length && (
             <EmptyState
               title="A quiet start."
-              description="New expenses will appear here."
+              description="New expenses and payment records will appear here."
             />
           )}
           {query.data.expenses.map((e) => (
@@ -630,6 +659,11 @@ export function LiveLedgerScreen({ activity = false }: { activity?: boolean }) {
         </>
       ) : (
         <>
+          <PaymentHistory
+            payments={query.data.payments}
+            groups={query.data.balances}
+            pendingOnly
+          />
           {!query.data.balances.length && (
             <EmptyState
               title="Start with your people."
@@ -658,12 +692,14 @@ export function LiveLedgerScreen({ activity = false }: { activity?: boolean }) {
                 >
                   <Text>View group</Text>
                 </Button>
+                <PaymentOptions group={g} />
               </Panel>
             );
           })}
           <Text className="text-sm text-muted-foreground">
-            Balances reflect recorded expenses. Payment recording and
-            confirmation come in a later phase.
+            Balances include confirmed payments. Pending, rejected, and
+            cancelled records do not change them. Payments are user-recorded,
+            not bank-verified.
           </Text>
         </>
       )}

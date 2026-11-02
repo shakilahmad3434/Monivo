@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
-import { expenseSchema } from '@monivo/shared';
+import { expenseSchema, paymentSchema } from '@monivo/shared';
 import { apiRequest } from './client';
 import { useSession } from '@/auth/session';
 
@@ -32,12 +32,19 @@ export function useLedger() {
       apiRequest(
         '/ledger',
         expensesResponse.extend({
+          payments: z.array(paymentSchema),
           balances: z.array(
             z.object({
               groupId: z.string(),
               groupName: z.string(),
               members: z.array(
-                z.object({ userId: z.string(), amount: z.number().int() }),
+                z.object({
+                  userId: z.string(),
+                  name: z.string(),
+                  amount: z.number().int(),
+                  availableToPay: z.number().int().min(0),
+                  availableToReceive: z.number().int().min(0),
+                }),
               ),
             }),
           ),

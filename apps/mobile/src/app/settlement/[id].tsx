@@ -20,8 +20,23 @@ import {
   parseAmount,
 } from '@/demo/model';
 import { useDemo } from '@/demo/provider';
+import { useSession } from '@/auth/session';
+import { LiveSettlementScreen } from '@/features/payments/live';
 
 export default function SettlementScreen() {
+  const { mode } = useSession();
+  const { id, groupId } = useLocalSearchParams<{
+    id: string;
+    groupId: string;
+  }>();
+  return mode === 'authenticated' ? (
+    <LiveSettlementScreen toId={id} groupId={groupId} />
+  ) : (
+    <DemoSettlementScreen />
+  );
+}
+
+function DemoSettlementScreen() {
   const { id, groupId } = useLocalSearchParams<{
     id: string;
     groupId: string;

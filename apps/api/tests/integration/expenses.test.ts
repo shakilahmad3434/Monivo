@@ -166,7 +166,7 @@ describe('Persistent expenses and duplicate-safe saves', () => {
       -savedRequest.expense.shares.find((s) => s.userId === ids.b)!.amount,
     );
     expect((await request(app).get('/api/ledger').set(auth('c'))).body).toEqual(
-      { expenses: [], balances: [] },
+      { expenses: [], payments: [], balances: [] },
     );
     expect(
       (

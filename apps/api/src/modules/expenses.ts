@@ -11,10 +11,16 @@ import {
 } from '@monivo/shared';
 import { modelsFor } from './models.js';
 import { ApiError } from './errors.js';
+import {
+  assertExpenseUnlocked,
+  groupLedger,
+  serializePayment,
+  writeLedger,
+} from './ledger.js';
 
 export function expenseRouter(connection: Connection) {
   const router = Router();
-  const { Group, Expense } = modelsFor(connection);
+  const { Group, Expense, Payment } = modelsFor(connection);
   const serialize = (e: InstanceType<typeof Expense>) => ({
     id: e._id.toString(),
     groupId: e.groupId.toString(),
@@ -73,9 +79,7 @@ export function expenseRouter(connection: Connection) {
   });
   router.post('/groups/:id/expenses', async (req, res) => {
     const id = objectIdSchema.parse(req.params.id);
-    const group = await member(id, res.locals.user.id);
     const { requestId, expense } = createExpenseSchema.parse(req.body);
-    validate(expense, group.memberIds.map(String));
     // Canonicalize share order so a retry cannot create a second expense.
     expense.shares.sort((a, b) => a.userId.localeCompare(b.userId));
     const requestHash = createHash('sha256')
@@ -83,39 +87,36 @@ export function expenseRouter(connection: Connection) {
       .digest('hex');
     const key = { groupId: id, createdBy: res.locals.user._id, requestId };
     const now = new Date();
-    let record;
-    try {
-      record = await Expense.findOneAndUpdate(
-        key,
-        {
-          $setOnInsert: {
-            ...key,
-            ...expense,
-            requestHash,
-            version: 1,
-            deleted: false,
-            createdAt: now,
-            updatedAt: now,
+    const result = await writeLedger(
+      connection,
+      id,
+      res.locals.user.id,
+      async (session, group) => {
+        validate(expense, group.memberIds.map(String));
+        const record = await Expense.findOneAndUpdate(
+          key,
+          {
+            $setOnInsert: {
+              ...key,
+              ...expense,
+              requestHash,
+              version: 1,
+              deleted: false,
+              createdAt: now,
+              updatedAt: now,
+            },
           },
-        },
-        { upsert: true, returnDocument: 'after', timestamps: false },
-      );
-    } catch (error) {
-      if (!(
-        typeof error === 'object' &&
-        error &&
-        'code' in error &&
-        error.code === 11000
-      ))
-        throw error;
-      record = await Expense.findOne(key);
-    }
-    if (!record || record.requestHash !== requestHash)
-      throw new ApiError(
-        409,
-        'This save was already used for different details. Open a new expense.',
-      );
-    res.status(201).json({ expense: serialize(record) });
+          { upsert: true, returnDocument: 'after', timestamps: false, session },
+        );
+        if (!record || record.requestHash !== requestHash)
+          throw new ApiError(
+            409,
+            'This save was already used for different details. Open a new expense.',
+          );
+        return serialize(record);
+      },
+    );
+    res.status(201).json({ expense: result });
   });
   router.get('/expenses/:id', async (req, res) => {
     const record = await Expense.findOne({
@@ -124,28 +125,43 @@ export function expenseRouter(connection: Connection) {
     });
     if (!record) throw new ApiError(404, 'Expense not found.');
     await member(record.groupId.toString(), res.locals.user.id);
-    res.json({ expense: serialize(record) });
+    const locked = !!(await Payment.exists({
+      expenseIds: record._id,
+      status: { $in: ['pending', 'confirmed'] },
+    }));
+    res.json({ expense: { ...serialize(record), locked } });
   });
   router.patch('/expenses/:id', async (req, res) => {
     const id = objectIdSchema.parse(req.params.id);
     const { expense, version } = updateExpenseSchema.parse(req.body);
     const record = await Expense.findOne({ _id: id, deleted: false });
     if (!record) throw new ApiError(404, 'Expense not found.');
-    const group = await member(record.groupId.toString(), res.locals.user.id);
-    if (record.createdBy.toString() !== res.locals.user.id)
-      throw new ApiError(
-        403,
-        'Only the person who added this expense can change it.',
-      );
-    validate(expense, group.memberIds.map(String));
-    const updated = await Expense.findOneAndUpdate(
-      { _id: id, version, deleted: false },
-      { $set: expense, $inc: { version: 1 } },
-      { returnDocument: 'after' },
+    const result = await writeLedger(
+      connection,
+      record.groupId.toString(),
+      res.locals.user.id,
+      async (session, group) => {
+        if (record.createdBy.toString() !== res.locals.user.id)
+          throw new ApiError(
+            403,
+            'Only the person who added this expense can change it.',
+          );
+        validate(expense, group.memberIds.map(String));
+        await assertExpenseUnlocked(connection, id, session);
+        const updated = await Expense.findOneAndUpdate(
+          { _id: id, version, deleted: false },
+          { $set: expense, $inc: { version: 1 } },
+          { returnDocument: 'after', session },
+        );
+        if (!updated)
+          throw new ApiError(
+            409,
+            'This expense changed. Refresh before editing.',
+          );
+        return serialize(updated);
+      },
     );
-    if (!updated)
-      throw new ApiError(409, 'This expense changed. Refresh before editing.');
-    res.json({ expense: serialize(updated) });
+    res.json({ expense: result });
   });
   router.delete('/expenses/:id', async (req, res) => {
     const id = objectIdSchema.parse(req.params.id);
@@ -155,52 +171,73 @@ export function expenseRouter(connection: Connection) {
       .parse(req.body);
     const record = await Expense.findById(id);
     if (!record) throw new ApiError(404, 'Expense not found.');
-    await member(record.groupId.toString(), res.locals.user.id);
-    if (record.createdBy.toString() !== res.locals.user.id)
-      throw new ApiError(
-        403,
-        'Only the person who added this expense can delete it.',
-      );
-    if (record.deleted) {
-      res.status(204).end();
-      return;
-    }
-    const updated = await Expense.findOneAndUpdate(
-      { _id: id, version, deleted: false },
-      { $set: { deleted: true }, $inc: { version: 1 } },
+    await writeLedger(
+      connection,
+      record.groupId.toString(),
+      res.locals.user.id,
+      async (session) => {
+        if (record.createdBy.toString() !== res.locals.user.id)
+          throw new ApiError(
+            403,
+            'Only the person who added this expense can delete it.',
+          );
+        if (record.deleted) {
+          return;
+        }
+        await assertExpenseUnlocked(connection, id, session);
+        const updated = await Expense.findOneAndUpdate(
+          { _id: id, version, deleted: false },
+          { $set: { deleted: true }, $inc: { version: 1 } },
+          { session },
+        );
+        if (!updated)
+          throw new ApiError(
+            409,
+            'This expense changed. Refresh before deleting.',
+          );
+      },
     );
-    if (!updated)
-      throw new ApiError(409, 'This expense changed. Refresh before deleting.');
     res.status(204).end();
   });
   router.get('/ledger', async (_req, res) => {
-    const groups = await Group.find({ memberIds: res.locals.user._id });
-    const expenses = await Expense.find({
-      groupId: { $in: groups.map((g) => g._id) },
-      deleted: false,
-    }).sort({ updatedAt: -1, _id: -1 });
-    const balances = groups.map((group) => {
-      const totals: Record<string, number> = Object.fromEntries(
-        group.memberIds.map((id) => [id.toString(), 0]),
-      );
-      for (const e of expenses.filter((e) => e.groupId.equals(group._id))) {
-        const payer = e.payerId.toString();
-        totals[payer] = (totals[payer] ?? 0) + e.amount;
-        for (const share of e.shares) {
-          const id = share.userId.toString();
-          totals[id] = (totals[id] ?? 0) - share.amount;
+    const result = await connection.transaction(
+      async (session) => {
+        const groups = await Group.find({
+          memberIds: res.locals.user._id,
+        }).session(session);
+        const expenses = [];
+        const payments = [];
+        const balances = [];
+        for (const group of groups) {
+          const ledger = await groupLedger(connection, group, session);
+          expenses.push(...ledger.expenses.map(serialize));
+          payments.push(...ledger.payments.map(serializePayment));
+          const users = await modelsFor(connection)
+            .User.find({ _id: { $in: group.memberIds } })
+            .select('name')
+            .session(session);
+          balances.push({
+            groupId: group.id,
+            groupName: group.name,
+            members: ledger.members.map((m) => ({
+              ...m,
+              name: users.find((u) => u.id === m.userId)?.name ?? 'Member',
+            })),
+          });
         }
-      }
-      return {
-        groupId: group.id,
-        groupName: group.name,
-        members: Object.entries(totals).map(([userId, amount]) => ({
-          userId,
-          amount,
-        })),
-      };
-    });
-    res.json({ expenses: expenses.map(serialize), balances });
+        expenses.sort(
+          (a, b) =>
+            b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id),
+        );
+        payments.sort(
+          (a, b) =>
+            b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id),
+        );
+        return { expenses, payments, balances };
+      },
+      { readConcern: { level: 'snapshot' } },
+    );
+    res.json(result);
   });
   return router;
 }

@@ -103,6 +103,7 @@ export const expenseSchema = z.object({
   ),
   version: z.number().int(),
   deleted: z.boolean(),
+  locked: z.boolean().default(false),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
@@ -117,3 +118,25 @@ export function splitEqually(amount: number, ids: string[]) {
       (index < amount % sorted.length ? 1 : 0),
   }));
 }
+
+export const createPaymentSchema = z
+  .object({
+    requestId: z.uuid(),
+    toId: objectIdSchema,
+    amount: paiseSchema,
+  })
+  .strict();
+export const paymentActionSchema = z
+  .object({ action: z.enum(['confirm', 'reject', 'cancel']) })
+  .strict();
+export const paymentSchema = z.object({
+  id: objectIdSchema,
+  groupId: objectIdSchema,
+  fromId: objectIdSchema,
+  toId: objectIdSchema,
+  amount: paiseSchema,
+  status: z.enum(['pending', 'confirmed', 'rejected', 'cancelled']),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export type LivePayment = z.infer<typeof paymentSchema>;

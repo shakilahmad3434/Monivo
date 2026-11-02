@@ -13,6 +13,7 @@ import { modelsFor } from './models.js';
 import { ApiError } from './errors.js';
 import { googleVerifier, type VerifyGoogleToken } from './google.js';
 import { expenseRouter } from './expenses.js';
+import { paymentRouter } from './payments.js';
 
 const hash = (token: string) =>
   createHash('sha256').update(token).digest('hex');
@@ -214,5 +215,6 @@ export function createApiRouter(options: ApiOptions) {
     response.json({ group: await serializeGroup(group) });
   });
   router.use(expenseRouter(options.connection));
+  router.use(paymentRouter(options.connection));
   return router;
 }

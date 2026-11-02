@@ -29,6 +29,7 @@ const groupSchema = new Schema(
     },
     inviteHash: { type: String, select: false },
     inviteExpiresAt: Date,
+    ledgerVersion: { type: Number, default: 0 },
   },
   { timestamps: true },
 );
@@ -61,11 +62,32 @@ expenseSchema.index(
   { unique: true },
 );
 
+const paymentSchema = new Schema(
+  {
+    groupId: { type: Schema.Types.ObjectId, required: true, index: true },
+    fromId: { type: Schema.Types.ObjectId, required: true },
+    toId: { type: Schema.Types.ObjectId, required: true },
+    amount: { type: Number, required: true },
+    requestId: { type: String, required: true },
+    status: {
+      type: String,
+      enum: ['pending', 'confirmed', 'rejected', 'cancelled'],
+      default: 'pending',
+      required: true,
+    },
+    expenseIds: [{ type: Schema.Types.ObjectId }],
+  },
+  { timestamps: true },
+);
+paymentSchema.index({ groupId: 1, fromId: 1, requestId: 1 }, { unique: true });
+paymentSchema.index({ expenseIds: 1, status: 1 });
+
 export function modelsFor(connection: Connection) {
   return {
     User: connection.model('User', userSchema),
     Session: connection.model('Session', sessionSchema),
     Group: connection.model('Group', groupSchema),
     Expense: connection.model('Expense', expenseSchema),
+    Payment: connection.model('Payment', paymentSchema),
   };
 }

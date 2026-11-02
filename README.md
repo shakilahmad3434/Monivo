@@ -5,9 +5,10 @@ interactive sample UI, and Phase 3 Google sign-in, profiles, and persistent grou
 with invitations. Phase 4 adds persistent expenses, equal/custom splits, editing,
 deletion, and group balances. Google sign-in and the Phase 3 phone flows have been
 verified by the project owner. Real OAuth requires an Android development build.
-Payment recording and confirmation come later.
+Phase 5 adds partial/full payment records, recipient confirmation, rejection,
+cancellation, payment history, and expense protection during settlement.
 
-See [Phase 4 scope and verification](docs/phase-4.md).
+See [Phase 5 scope and manual verification](docs/phase-5.md).
 
 ```text
 apps/
