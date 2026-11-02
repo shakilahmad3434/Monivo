@@ -11,8 +11,10 @@ Phase 6 adds optional UPI IDs, recipient review, and an Android UPI-app handoff
 with a manual payment-recording fallback.
 Phase 7 adds owner-managed group names, ownership transfer, and safe leaving
 with balance/payment checks and preserved member history.
+Phase 8 adds paginated expense/payment feeds, full-history balance summaries,
+session-expiry recovery, clearer connection errors, and app-resume refresh.
 
-See [Phase 7 scope and manual verification](docs/phase-7.md).
+See [Phase 8 verification and remaining phone checks](docs/phase-8.md).
 
 ```text
 apps/

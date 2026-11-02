@@ -65,6 +65,7 @@ expenseSchema.index(
   { createdBy: 1, groupId: 1, requestId: 1 },
   { unique: true },
 );
+expenseSchema.index({ groupId: 1, deleted: 1, createdAt: -1, _id: -1 });
 
 const paymentSchema = new Schema(
   {
@@ -85,6 +86,8 @@ const paymentSchema = new Schema(
 );
 paymentSchema.index({ groupId: 1, fromId: 1, requestId: 1 }, { unique: true });
 paymentSchema.index({ expenseIds: 1, status: 1 });
+paymentSchema.index({ groupId: 1, createdAt: -1, _id: -1 });
+paymentSchema.index({ groupId: 1, status: 1, createdAt: -1, _id: -1 });
 
 export function modelsFor(connection: Connection) {
   return {

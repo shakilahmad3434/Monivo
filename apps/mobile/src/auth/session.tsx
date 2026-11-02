@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
   type ReactNode,
 } from 'react';
 import { Platform } from 'react-native';
@@ -16,8 +17,10 @@ import {
 import { z } from 'zod';
 import { ApiError, apiRequest } from '@/api/client';
 import { googleIdToken } from './google';
+import { createSessionStorage } from '@/lib/session-storage';
+import { subscribeSessionExpiry } from '@/api/session-events';
 
-const key = 'monivo-session';
+const storage = createSessionStorage(SecureStore);
 type SessionContextValue = {
   ready: boolean;
   mode: 'signedOut' | 'demo' | 'authenticated';
@@ -35,16 +38,33 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const client = useQueryClient();
   const [mode, setMode] = useState<SessionContextValue['mode']>('signedOut');
   const [token, setToken] = useState<string>();
+  const currentToken = useRef<string | undefined>(undefined);
   const [user, setUser] = useState<Profile>();
   const [ready, setReady] = useState(false);
   const [restoreError, setRestoreError] = useState<string>();
   const [restoreAttempt, setRestoreAttempt] = useState(0);
+  useEffect(
+    () =>
+      subscribeSessionExpiry((expired) => {
+        if (currentToken.current !== expired) return;
+        currentToken.current = undefined;
+        client.clear();
+        setToken(undefined);
+        setUser(undefined);
+        setMode('signedOut');
+        setRestoreError('Your session has expired. Please sign in again.');
+        void storage.clearIf(expired).catch(() => {
+          /* Retry restoration will recheck this expired token. */
+        });
+      }),
+    [client],
+  );
   useEffect(() => {
     let cancelled = false;
     async function restore() {
+      let saved: string | null = null;
       try {
-        const saved =
-          Platform.OS === 'web' ? null : await SecureStore.getItemAsync(key);
+        saved = Platform.OS === 'web' ? null : await storage.get();
         if (saved) {
           const data = await apiRequest(
             '/me',
@@ -53,6 +73,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           );
           if (!cancelled) {
             setToken(saved);
+            currentToken.current = saved;
             setUser(data.user);
             setMode('authenticated');
           }
@@ -60,7 +81,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           try {
-            await SecureStore.deleteItemAsync(key);
+            if (saved) await storage.clearIf(saved);
           } catch {
             if (!cancelled)
               setRestoreError(
@@ -87,7 +108,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       method: 'POST',
       body: { idToken },
     });
-    await SecureStore.setItemAsync(key, data.token);
+    await storage.set(data.token);
+    currentToken.current = data.token;
     client.clear();
     setRestoreError(undefined);
     setToken(data.token);
@@ -95,6 +117,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setMode('authenticated');
   }
   async function logout() {
+    const oldToken = token;
     if (token) {
       try {
         await apiRequest('/auth/logout', null, { method: 'POST', token });
@@ -103,7 +126,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       }
     }
     if (mode === 'authenticated' && Platform.OS !== 'web')
-      await SecureStore.deleteItemAsync(key);
+      if (oldToken) await storage.clearIf(oldToken);
+    if (currentToken.current && currentToken.current !== oldToken) return;
+    currentToken.current = undefined;
     client.clear();
     setToken(undefined);
     setUser(undefined);
@@ -127,6 +152,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           setRestoreAttempt((value) => value + 1);
         },
         exploreDemo: () => {
+          currentToken.current = undefined;
           client.clear();
           setToken(undefined);
           setUser(undefined);

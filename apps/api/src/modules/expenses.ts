@@ -11,9 +11,10 @@ import {
 } from '@monivo/shared';
 import { modelsFor } from './models.js';
 import { ApiError } from './errors.js';
+import { readPage, pageResult } from './pagination.js';
 import {
   assertExpenseUnlocked,
-  groupLedger,
+  summarizeGroup,
   serializePayment,
   writeLedger,
 } from './ledger.js';
@@ -72,11 +73,62 @@ export function expenseRouter(connection: Connection) {
   router.get('/groups/:id/expenses', async (req, res) => {
     const id = objectIdSchema.parse(req.params.id);
     await member(id, res.locals.user.id);
-    const expenses = await Expense.find({ groupId: id, deleted: false }).sort({
-      createdAt: -1,
-      _id: -1,
+    const page = readPage(req.query);
+    if (page.pending) throw new ApiError(400, 'Pending is a payment filter.');
+    const rows = await Expense.find({
+      groupId: id,
+      deleted: false,
+      ...page.filter,
+    })
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(page.limit + 1);
+    const result = pageResult(rows, page.limit);
+    res.json({
+      expenses: result.items.map(serialize),
+      nextCursor: result.nextCursor,
     });
-    res.json({ expenses: expenses.map(serialize) });
+  });
+  router.get('/expenses', async (req, res) => {
+    const page = readPage(req.query);
+    if (page.pending) throw new ApiError(400, 'Pending is a payment filter.');
+    const groups = await Group.find({ memberIds: res.locals.user._id }).select(
+      '_id',
+    );
+    const rows = await Expense.find({
+      groupId: { $in: groups.map((g) => g._id) },
+      deleted: false,
+      ...page.filter,
+    })
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(page.limit + 1);
+    const result = pageResult(rows, page.limit);
+    res.json({
+      expenses: result.items.map(serialize),
+      nextCursor: result.nextCursor,
+    });
+  });
+  router.get('/payments', async (req, res) => {
+    const page = readPage(req.query);
+    const groups = await Group.find({ memberIds: res.locals.user._id }).select(
+      '_id',
+    );
+    const conditions: Record<string, unknown>[] = [
+      { groupId: { $in: groups.map((g) => g._id) } },
+      page.filter,
+    ];
+    if (page.pending)
+      conditions.push({
+        status: 'pending',
+        $or: [{ fromId: res.locals.user._id }, { toId: res.locals.user._id }],
+      });
+    const rows = await Payment.find({ $and: conditions })
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(page.limit + 1);
+    const result = pageResult(rows, page.limit);
+    res.json({
+      payments: result.items.map(serializePayment),
+      nextCursor: result.nextCursor,
+    });
   });
   router.post('/groups/:id/expenses', async (req, res) => {
     const id = objectIdSchema.parse(req.params.id);
@@ -93,6 +145,15 @@ export function expenseRouter(connection: Connection) {
       id,
       res.locals.user.id,
       async (session, group) => {
+        const previous = await Expense.findOne(key).session(session);
+        if (previous) {
+          if (previous.requestHash !== requestHash)
+            throw new ApiError(
+              409,
+              'This save was already used for different details. Open a new expense.',
+            );
+          return serialize(previous);
+        }
         validate(expense, group.memberIds.map(String));
         const record = await Expense.findOneAndUpdate(
           key,
@@ -202,19 +263,38 @@ export function expenseRouter(connection: Connection) {
     );
     res.status(204).end();
   });
-  router.get('/ledger', async (_req, res) => {
+  router.get('/ledger', async (req, res) => {
+    const { summary } = z
+      .object({ summary: z.literal('1').optional() })
+      .strict()
+      .parse(req.query);
     const result = await connection.transaction(
       async (session) => {
         const groups = await Group.find({
           memberIds: res.locals.user._id,
         }).session(session);
-        const expenses = [];
-        const payments = [];
+        const groupIds = groups.map((group) => group._id);
+        // Compatibility previews are bounded. Clients use /expenses and
+        // /payments for complete history and /payments?pending=1 for the queue.
+        const expenses = summary
+          ? []
+          : (
+              await Expense.find({ groupId: { $in: groupIds }, deleted: false })
+                .sort({ createdAt: -1, _id: -1 })
+                .limit(20)
+                .session(session)
+            ).map(serialize);
+        const payments = summary
+          ? []
+          : (
+              await Payment.find({ groupId: { $in: groupIds } })
+                .sort({ createdAt: -1, _id: -1 })
+                .limit(20)
+                .session(session)
+            ).map(serializePayment);
         const balances = [];
         for (const group of groups) {
-          const ledger = await groupLedger(connection, group, session);
-          expenses.push(...ledger.expenses.map(serialize));
-          payments.push(...ledger.payments.map(serializePayment));
+          const members = await summarizeGroup(connection, group, session);
           const users = await modelsFor(connection)
             .User.find({
               _id: { $in: [...group.memberIds, ...group.formerMemberIds] },
@@ -224,20 +304,12 @@ export function expenseRouter(connection: Connection) {
           balances.push({
             groupId: group.id,
             groupName: group.name,
-            members: ledger.members.map((m) => ({
+            members: members.map((m) => ({
               ...m,
               name: users.find((u) => u.id === m.userId)?.name ?? 'Member',
             })),
           });
         }
-        expenses.sort(
-          (a, b) =>
-            b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id),
-        );
-        payments.sort(
-          (a, b) =>
-            b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id),
-        );
         return { expenses, payments, balances };
       },
       { readConcern: { level: 'snapshot' } },

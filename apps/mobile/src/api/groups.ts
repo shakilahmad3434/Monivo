@@ -10,9 +10,10 @@ export function useGroups() {
   return useQuery({
     queryKey: ['groups', user?.id],
     enabled: !!token,
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       apiRequest('/groups', z.object({ groups: z.array(groupSchema) }), {
         token,
+        signal,
       }),
   });
 }
@@ -21,6 +22,7 @@ export function useGroup(id: string) {
   return useQuery({
     queryKey: ['group', user?.id, id],
     enabled: !!token && !!id,
-    queryFn: () => apiRequest(`/groups/${id}`, groupResponse, { token }),
+    queryFn: ({ signal }) =>
+      apiRequest(`/groups/${id}`, groupResponse, { token, signal }),
   });
 }

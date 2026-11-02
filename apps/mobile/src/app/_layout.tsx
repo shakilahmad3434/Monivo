@@ -1,6 +1,11 @@
 import { Stack, type ErrorBoundaryProps } from 'expo-router';
-import { Suspense } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Suspense, useEffect } from 'react';
+import { AppState, Platform } from 'react-native';
+import {
+  focusManager,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query';
 import { SessionProvider, useSession } from '@/auth/session';
 import { ApiError } from '@/api/client';
 import { StatusBar } from 'expo-status-bar';
@@ -63,6 +68,17 @@ function Navigator() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    focusManager.setFocused(AppState.currentState === 'active');
+    const listener = AppState.addEventListener('change', (state) =>
+      focusManager.setFocused(state === 'active'),
+    );
+    return () => {
+      listener.remove();
+      focusManager.setFocused(undefined);
+    };
+  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>

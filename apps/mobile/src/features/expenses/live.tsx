@@ -30,7 +30,7 @@ import { apiRequest, ApiError } from '@/api/client';
 import { useGroup, useGroups } from '@/api/groups';
 import { UpiReminderNotice } from '@/features/payments/upi';
 import {
-  PaymentHistory,
+  PaginatedPayments,
   PaymentOptions,
   UnfinishedPaymentNotice,
 } from '@/features/payments/live';
@@ -142,6 +142,19 @@ function ExpenseEditor({
   const [ready, setReady] = useState(!!existing);
   const busy = useRef(false);
   const pendingKey = `monivo-expense-${user!.id}`;
+  useEffect(() => {
+    const currentMembers = new Set(group.members.map((member) => member.id));
+    if (
+      !currentMembers.has(payerId) ||
+      participants.some((id) => !currentMembers.has(id))
+    ) {
+      if (!currentMembers.has(payerId)) setPayer(user!.id);
+      setParticipants((ids) => ids.filter((id) => currentMembers.has(id)));
+      setError(
+        'Group membership changed. Review the payer and shares before saving.',
+      );
+    }
+  }, [group.members, payerId, participants, user]);
   useEffect(() => {
     if (existing) return;
     let active = true;
@@ -446,10 +459,16 @@ function ExpenseEditor({
   );
 }
 
-export function ExpenseRows({ groupId }: { groupId: string }) {
+export function ExpenseRows({
+  groupId,
+  groupNames,
+}: {
+  groupId?: string;
+  groupNames?: Record<string, string>;
+}) {
   const query = useExpenses(groupId);
   if (query.isPending) return <LoadingState />;
-  if (query.isError)
+  if (query.isError && !query.data)
     return (
       <ErrorState
         message={message(query.error)}
@@ -461,23 +480,53 @@ export function ExpenseRows({ groupId }: { groupId: string }) {
       <Button variant="ghost" onPress={() => void query.refetch()}>
         <Text>{query.isFetching ? 'Refreshing…' : 'Refresh expenses'}</Text>
       </Button>
-      {!query.data.expenses.length && (
+      {query.isError && (
+        <ErrorState
+          message={message(query.error)}
+          onRetry={() =>
+            void (query.isFetchNextPageError
+              ? query.fetchNextPage()
+              : query.refetch())
+          }
+        />
+      )}
+      {!query.data!.expenses.length && (
         <EmptyState
           title="Your first shared expense."
           description="Add an expense to start tracking what everyone paid and owes."
         />
       )}
-      {query.data.expenses.map((e) => (
+      {query.data!.expenses.map((e) => (
         <Button
           key={e.id}
           variant="outline"
           className="justify-between"
           onPress={() => router.push(`/expense/${e.id}`)}
         >
-          <Text className="flex-1">{e.description}</Text>
+          <View className="flex-1">
+            <Text>{e.description}</Text>
+            {groupNames && (
+              <Text className="text-xs text-muted-foreground">
+                {groupNames[e.groupId] ?? 'Your group'} ·{' '}
+                {new Date(e.createdAt).toLocaleDateString('en-IN')}
+                {e.version > 1 ? ' · Edited' : ''}
+              </Text>
+            )}
+          </View>
           <Text>{money(e.amount)}</Text>
         </Button>
       ))}
+      {query.hasNextPage && (
+        <Button
+          variant="outline"
+          disabled={query.isFetching}
+          onPress={() => void query.fetchNextPage()}
+        >
+          <Text>
+            {query.isFetchingNextPage ? 'Loading…' : 'Load more expenses'}
+          </Text>
+        </Button>
+      )}
     </>
   );
 }
@@ -523,6 +572,13 @@ export function LiveExpenseScreen({ id }: { id: string }) {
     ].find((m) => m.id === id)?.name ?? 'Member';
   return (
     <Screen title={e.description} subtitle={group.data?.group.name} back>
+      <Button
+        variant="ghost"
+        disabled={query.isFetching}
+        onPress={() => void query.refetch()}
+      >
+        <Text>{query.isFetching ? 'Refreshing…' : 'Refresh expense'}</Text>
+      </Button>
       <Panel>
         <Text className="text-4xl font-bold">{money(e.amount)}</Text>
         <Text>Paid by {name(e.payerId)}</Text>
@@ -602,6 +658,7 @@ export function LiveExpenseScreen({ id }: { id: string }) {
 
 export function LiveLedgerScreen({ activity = false }: { activity?: boolean }) {
   const query = useLedger();
+  const client = useQueryClient();
   const { user } = useSession();
   return (
     <Screen
@@ -617,7 +674,7 @@ export function LiveLedgerScreen({ activity = false }: { activity?: boolean }) {
       <Button
         variant="ghost"
         disabled={query.isFetching}
-        onPress={() => void query.refetch()}
+        onPress={() => void client.invalidateQueries()}
       >
         <Text>{query.isFetching ? 'Refreshing…' : 'Refresh'}</Text>
       </Button>
@@ -630,45 +687,20 @@ export function LiveLedgerScreen({ activity = false }: { activity?: boolean }) {
         />
       ) : activity ? (
         <>
-          <PaymentHistory
-            payments={query.data.payments}
-            groups={query.data.balances}
+          <PaginatedPayments groups={query.data.balances} />
+          <SectionTitle>Expenses</SectionTitle>
+          <ExpenseRows
+            groupNames={Object.fromEntries(
+              query.data.balances.map((group) => [
+                group.groupId,
+                group.groupName,
+              ]),
+            )}
           />
-          {!query.data.expenses.length && !query.data.payments.length && (
-            <EmptyState
-              title="A quiet start."
-              description="New expenses and payment records will appear here."
-            />
-          )}
-          {query.data.expenses.map((e) => (
-            <Button
-              key={e.id}
-              variant="outline"
-              className="justify-between"
-              onPress={() => router.push(`/expense/${e.id}`)}
-            >
-              <View className="flex-1">
-                <Text>{e.description}</Text>
-                <Text className="text-xs text-muted-foreground">
-                  {
-                    query.data.balances.find((g) => g.groupId === e.groupId)
-                      ?.groupName
-                  }{' '}
-                  · {new Date(e.updatedAt).toLocaleDateString('en-IN')}
-                  {e.version > 1 ? ' · Edited' : ''}
-                </Text>
-              </View>
-              <Text>{money(e.amount)}</Text>
-            </Button>
-          ))}
         </>
       ) : (
         <>
-          <PaymentHistory
-            payments={query.data.payments}
-            groups={query.data.balances}
-            pendingOnly
-          />
+          <PaginatedPayments groups={query.data.balances} pendingOnly />
           {!query.data.balances.length && (
             <EmptyState
               title="Start with your people."

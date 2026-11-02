@@ -82,6 +82,112 @@ export const serializePayment = (
   updatedAt: p.updatedAt.toISOString(),
 });
 
+// Read-only balance summaries aggregate money in MongoDB rather than loading
+// every expense and payment document into the API or truncating totals to a page.
+export async function summarizeGroup(
+  connection: Connection,
+  group: InstanceType<ReturnType<typeof modelsFor>['Group']>,
+  session: ClientSession,
+) {
+  const { Expense, Payment } = modelsFor(connection);
+  const costs = await Expense.aggregate<{
+    _id: import('mongoose').Types.ObjectId;
+    amount: number;
+  }>([
+    { $match: { groupId: group._id, deleted: false } },
+    {
+      $project: {
+        moves: {
+          $concatArrays: [
+            [{ userId: '$payerId', amount: '$amount' }],
+            {
+              $map: {
+                input: '$shares',
+                as: 'share',
+                in: {
+                  userId: '$$share.userId',
+                  amount: { $multiply: ['$$share.amount', -1] },
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+    { $unwind: '$moves' },
+    { $group: { _id: '$moves.userId', amount: { $sum: '$moves.amount' } } },
+  ]).session(session);
+  const payments = await Payment.aggregate<{
+    _id: import('mongoose').Types.ObjectId;
+    amount: number;
+    outgoing: number;
+    incoming: number;
+  }>([
+    {
+      $match: { groupId: group._id, status: { $in: ['pending', 'confirmed'] } },
+    },
+    {
+      $project: {
+        moves: [
+          {
+            userId: '$fromId',
+            amount: {
+              $cond: [{ $eq: ['$status', 'confirmed'] }, '$amount', 0],
+            },
+            outgoing: {
+              $cond: [{ $eq: ['$status', 'pending'] }, '$amount', 0],
+            },
+            incoming: 0,
+          },
+          {
+            userId: '$toId',
+            amount: {
+              $cond: [
+                { $eq: ['$status', 'confirmed'] },
+                { $multiply: ['$amount', -1] },
+                0,
+              ],
+            },
+            outgoing: 0,
+            incoming: {
+              $cond: [{ $eq: ['$status', 'pending'] }, '$amount', 0],
+            },
+          },
+        ],
+      },
+    },
+    { $unwind: '$moves' },
+    {
+      $group: {
+        _id: '$moves.userId',
+        amount: { $sum: '$moves.amount' },
+        outgoing: { $sum: '$moves.outgoing' },
+        incoming: { $sum: '$moves.incoming' },
+      },
+    },
+  ]).session(session);
+  const ids = new Set(
+    [
+      ...group.memberIds,
+      ...group.formerMemberIds,
+      ...costs.map((r) => r._id),
+      ...payments.map((r) => r._id),
+    ].map(String),
+  );
+  return [...ids].map((userId) => {
+    const payment = payments.find((r) => String(r._id) === userId);
+    const amount =
+      (costs.find((r) => String(r._id) === userId)?.amount ?? 0) +
+      (payment?.amount ?? 0);
+    return {
+      userId,
+      amount,
+      availableToPay: Math.max(0, -amount - (payment?.outgoing ?? 0)),
+      availableToReceive: Math.max(0, amount - (payment?.incoming ?? 0)),
+    };
+  });
+}
+
 export async function assertExpenseUnlocked(
   connection: Connection,
   id: string,

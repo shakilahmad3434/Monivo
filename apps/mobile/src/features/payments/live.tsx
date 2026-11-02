@@ -23,7 +23,7 @@ import {
 } from '@/components/screen';
 import { useSession } from '@/auth/session';
 import { ApiError, apiRequest } from '@/api/client';
-import { money, parsePaise, useLedger } from '@/api/expenses';
+import { money, parsePaise, useLedger, usePaymentPages } from '@/api/expenses';
 import { clearUpiReminder, UpiHandoff } from './upi';
 
 type Balance = NonNullable<
@@ -138,6 +138,51 @@ export function PaymentHistory({
           group={groups.find((g) => g.groupId === payment.groupId)}
         />
       ))}
+    </View>
+  );
+}
+
+export function PaginatedPayments({
+  groups,
+  pendingOnly = false,
+}: {
+  groups: Balance[];
+  pendingOnly?: boolean;
+}) {
+  const query = usePaymentPages(pendingOnly);
+  return (
+    <View className="gap-3">
+      {query.isPending && <LoadingState />}
+      {query.isError && (
+        <ErrorState
+          message={errorMessage(query.error)}
+          onRetry={() =>
+            void (query.isFetchNextPageError
+              ? query.fetchNextPage()
+              : query.refetch())
+          }
+        />
+      )}
+      <PaymentHistory
+        payments={query.payments}
+        groups={groups}
+        pendingOnly={pendingOnly}
+      />
+      {query.hasNextPage && (
+        <Button
+          variant="outline"
+          disabled={query.isFetching}
+          onPress={() => void query.fetchNextPage()}
+        >
+          <Text>
+            {query.isFetchingNextPage
+              ? 'Loading…'
+              : pendingOnly
+                ? 'Load more pending payments'
+                : 'Load more payments'}
+          </Text>
+        </Button>
+      )}
     </View>
   );
 }
